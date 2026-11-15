@@ -55,7 +55,7 @@ class TrackingSession:
             track_activation_threshold=0.5, minimum_consecutive_frames=3,
         )
         self.conf = 0.35
-        self.anchor = sv.Position.BOTTOM_CENTER
+        self.anchor = sv.Position.CENTER    # eye-level cameras often cannot see feet
         self.line_norm: list | None = None
         self.zone_norm: list | None = None
         self.line: sv.LineZone | None = None
@@ -158,7 +158,7 @@ class TrackingSession:
                 inside = self.zone.trigger(det)
             self._update_zone(t, ids, inside, events)
 
-        anchors = det.get_anchors_coordinates(sv.Position.BOTTOM_CENTER) if len(det) else np.empty((0, 2))
+        anchors = det.get_anchors_coordinates(self.anchor) if len(det) else np.empty((0, 2))
         for ax, ay in anchors:
             gx = min(max(int(ax / w * HEAT_W), 0), HEAT_W - 1)
             gy = min(max(int(ay / h * HEAT_H), 0), HEAT_H - 1)

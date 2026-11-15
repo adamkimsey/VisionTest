@@ -88,7 +88,7 @@
             </div>
             <div>
               <div class="label" style="margin-bottom:6px">Track people by</div>
-              <div class="seg block" id="anchor-seg"><button class="on" data-v="feet">Feet</button><button data-v="center">Body centre</button></div>
+              <div class="seg block" id="anchor-seg"><button class="on" data-v="center">Body centre</button><button data-v="feet">Feet</button></div>
             </div>
             <div class="row-between"><span class="label">Show movement trails</span><label class="switch"><input type="checkbox" id="trails" checked aria-label="Show movement trails"><i></i></label></div>
           </div>
@@ -105,7 +105,7 @@
       <header class="view-head">
         <div>
           <h1>Motion capture</h1>
-          <p class="sub">Capture body movement without markers and apply it to a 3D character.</p>
+          <p class="sub">Capture the movement of one or two people without markers. Apply it to 3D characters.</p>
         </div>
         <div class="head-actions"><span class="pill" id="motion-status"><i class="dot"></i><span>No source</span></span></div>
       </header>
@@ -125,7 +125,8 @@
           <div class="sourcebar" id="motion-sourcebar">
             <span class="grow"></span>
             <button class="btn" id="motion-record" disabled><i class="rec-dot" style="color:var(--accent)"></i><span>Record motion</span></button>
-            <button class="btn" id="motion-export" disabled>Export</button>
+            <button class="btn" id="motion-export" disabled>Export for Blender</button>
+            <button class="btn ghost" id="motion-export-raw" disabled>Raw data</button>
           </div>
         </div>
         <aside class="panel">
@@ -170,7 +171,7 @@
             <div class="stats">
               <div class="stat"><div class="v" id="mo-fps">0</div><div class="l">Frames per second</div></div>
               <div class="stat"><div class="v" id="mo-conf">0<small>%</small></div><div class="l">Body visibility</div></div>
-              <div class="stat"><div class="v" id="mo-frames">0</div><div class="l">Frames recorded</div></div>
+              <div class="stat"><div class="v" id="mo-people">0</div><div class="l">People captured</div></div>
               <div class="stat"><div class="v" id="mo-time">0:00</div><div class="l">Recording length</div></div>
             </div>
           </div>
@@ -217,7 +218,7 @@
         </div>
         <div class="grid-2">
           <div class="card chart-card">
-            <div class="chart-head"><h3>Where people spent time</h3><p>Floor position in the camera view</p></div>
+            <div class="chart-head"><h3>Where people spent time</h3><p>Position in the camera view</p></div>
             <div class="heat" id="heat" style="margin-top:10px"><canvas></canvas></div>
             <div class="heat-legend"><span>Less time</span><i></i><span>More time</span></div>
           </div>

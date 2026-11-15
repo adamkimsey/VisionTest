@@ -27,7 +27,7 @@ export function initCount({ goInsights }) {
     line: null, zone: null,          // normalised 0..1 coordinates
     tool: null, draft: [], cursor: null,
     people: [], trails: new Map(),
-    conf: 0.35, anchor: "feet", showTrails: true,
+    conf: 0.35, anchor: "center", showTrails: true,
   };
 
   const source = new Source({

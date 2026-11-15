@@ -4,13 +4,13 @@ import * as THREE from "/vendor/three/three.module.js";
 import { GLTFLoader } from "/vendor/three/GLTFLoader.js";
 
 const CORAL = 0xff5a52;
-const L = {
+export const L = {
   nose: 0, earL: 7, earR: 8, shoulderL: 11, shoulderR: 12, elbowL: 13, elbowR: 14,
   wristL: 15, wristR: 16, indexL: 19, indexR: 20, hipL: 23, hipR: 24, kneeL: 25, kneeR: 26,
   ankleL: 27, ankleR: 28, heelL: 29, heelR: 30, toeL: 31, toeR: 32,
 };
 const UP = new THREE.Vector3(0, 1, 0);
-const mid = (a, b) => a.clone().add(b).multiplyScalar(0.5);
+export const mid = (a, b) => a.clone().add(b).multiplyScalar(0.5);
 
 /** Place a unit-height cylinder so that it runs from a to b. */
 function span(mesh, a, b) {
@@ -22,7 +22,7 @@ function span(mesh, a, b) {
 }
 
 /** Rotation whose X axis follows `right` and whose Y axis is close to `up`. */
-function basisQuat(right, up, out = new THREE.Quaternion()) {
+export function basisQuat(right, up, out = new THREE.Quaternion()) {
   const x = right.clone().normalize();
   const z = x.clone().cross(up).normalize();
   const y = z.clone().cross(x);
@@ -37,10 +37,10 @@ function headPoints(P) {
 
 // ---------------------------------------------------------------- skeleton
 export class SkeletonSkin {
-  constructor() {
+  constructor(color = CORAL) {
     this.group = new THREE.Group();
     const boneMat = new THREE.MeshBasicMaterial({ color: 0xf2f2f2 });
-    const jointMat = new THREE.MeshBasicMaterial({ color: CORAL });
+    const jointMat = new THREE.MeshBasicMaterial({ color });
     this.pairs = [
       [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [15, 19], [16, 20],
       [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28],
@@ -67,10 +67,10 @@ export class SkeletonSkin {
 
 // ---------------------------------------------------------------- body
 export class BodySkin {
-  constructor() {
+  constructor(color = CORAL) {
     this.group = new THREE.Group();
     const skin = new THREE.MeshStandardMaterial({ color: 0xf4f4f4, roughness: 0.55, metalness: 0.02 });
-    const joint = new THREE.MeshStandardMaterial({ color: CORAL, roughness: 0.4 });
+    const joint = new THREE.MeshStandardMaterial({ color, roughness: 0.4 });
     const limb = (a, b, r1, r2) => {
       const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r2, r1, 1, 20), skin);
       this.group.add(mesh);
@@ -122,7 +122,7 @@ export class BodySkin {
 }
 
 /** Head rotation from ears and nose. Falls back to the chest when unclear. */
-function headQuat(P, fallback) {
+export function headQuat(P, fallback) {
   const right = P[L.earL].clone().sub(P[L.earR]);
   const forward = P[L.nose].clone().sub(mid(P[L.earL], P[L.earR]));
   if (right.length() < 0.03 || forward.length() < 0.02) return fallback;
@@ -164,12 +164,12 @@ const LIMBS = [
 
 export class RigSkin {
   /** Load a .glb character from a URL. Throws when the rig cannot be read. */
-  static async load(url, { tintJoints = false } = {}) {
+  static async load(url, { tintJoints = false, color = CORAL } = {}) {
     const gltf = await new GLTFLoader().loadAsync(url);
-    return new RigSkin(gltf.scene, tintJoints);
+    return new RigSkin(gltf.scene, tintJoints, color);
   }
 
-  constructor(model, tintJoints) {
+  constructor(model, tintJoints, color) {
     this.group = new THREE.Group();
     this.group.add(model);
     model.traverse((o) => {
@@ -178,7 +178,7 @@ export class RigSkin {
         if (tintJoints) {
           // House colours for the built-in character: white body, coral joints.
           o.material = o.material.clone();
-          o.material.color.set(/joint/i.test(o.material.name || "") ? CORAL : 0xf2f2f2);
+          o.material.color.set(/joint/i.test(o.material.name || "") ? color : 0xf2f2f2);
           o.material.roughness = 0.55;
           o.material.metalness = 0;
         }
@@ -257,6 +257,8 @@ export class RigSkin {
       const offset = THREE.MathUtils.clamp((hips.y - legM - 0.07) * (this.legLength / legM), -1.2, 0.5);
       const target = this.restHipsPos.clone();
       target.y += offset;
+      target.add(this.group.position);            // the character may stand to one side
+      b.hips.parent.updateWorldMatrix(true, false);
       b.hips.position.copy(b.hips.parent.worldToLocal(target));
     }
 
