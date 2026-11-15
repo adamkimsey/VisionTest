@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VisionTest</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <script>
+    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <nav class="nav" aria-label="Main">
+    <div class="brand"><div class="brand-mark"></div><span>VisionTest</span></div>
+    <button class="nav-item active" data-view="count">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14.2c2.3.3 4 2.4 4 4.8"/></svg>
+      <span>People counter</span>
+    </button>
+    <button class="nav-item" data-view="motion">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="2"/><path d="M12 6.5v7M5 9l7 1.5L19 9M12 13.5l-4 7M12 13.5l4 7"/></svg>
+      <span>Motion capture</span>
+    </button>
+    <button class="nav-item" data-view="insights">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <span>Insights</span>
+    </button>
+    <div class="nav-foot">
+      <div class="engine"><i class="dot" id="engine-dot"></i><span id="engine-text">Starting engine</span></div>
+      <button class="btn ghost small" id="theme-toggle" title="Switch between dark and light">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M5 19l1.4-1.4M17.6 6.4 19 5"/></svg>
+        <span>Theme</span>
+      </button>
+    </div>
+  </nav>
+
+  <main>
+    <!-- ================= PEOPLE COUNTER ================= -->
+    <section class="view" id="view-count">
+      <header class="view-head">
+        <div>
+          <h1>People counter</h1>
+          <p class="sub">Track people, count line crossings, and measure time in an area.</p>
+        </div>
+        <div class="head-actions"><span class="pill" id="count-status"><i class="dot"></i><span>Not counting</span></span></div>
+      </header>
+      <div class="workspace">
+        <div class="stage-col">
+          <div class="stage" id="count-stage">
+            <div class="frame" hidden>
+              <video playsinline muted></video>
+              <canvas></canvas>
+            </div>
+            <div class="hud" id="count-hud" hidden></div>
+          </div>
+          <div class="sourcebar" id="count-sourcebar">
+            <span class="grow"></span>
+            <input class="field" id="count-name" placeholder="Session name (optional)" maxlength="60" aria-label="Session name">
+            <button class="btn primary" id="count-start" disabled>Start counting</button>
+          </div>
+        </div>
+        <aside class="panel">
+          <div class="card">
+            <div class="card-title">Live <span class="num" id="count-clock">0:00</span></div>
+            <div class="stats">
+              <div class="stat hero"><div class="v" id="st-unique">0</div><div class="l">Unique people</div></div>
+              <div class="stat"><div class="v" id="st-current">0</div><div class="l">In view now</div></div>
+              <div class="stat"><div class="v" id="st-in">0</div><div class="l">Crossed in</div></div>
+              <div class="stat"><div class="v" id="st-out">0</div><div class="l">Crossed out</div></div>
+              <div class="stat"><div class="v" id="st-zone">0</div><div class="l">In area now</div></div>
+              <div class="stat"><div class="v" id="st-dwell">0<small>s</small></div><div class="l">Avg time in area</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Counting tools</div>
+            <div class="tools">
+              <button class="btn small" id="tool-line">Draw line</button>
+              <button class="btn small" id="tool-zone">Draw area</button>
+              <button class="btn small" id="tool-flip" disabled>Flip direction</button>
+              <button class="btn small" id="tool-clear" disabled>Clear</button>
+            </div>
+            <p class="hint" style="margin-top:10px">The line counts people who cross it. The area counts people inside it and their time there.</p>
+          </div>
+          <div class="card stack">
+            <div class="card-title" style="margin-bottom:0">Settings</div>
+            <div>
+              <div class="row-between"><span class="label">Detection sensitivity</span><span class="label num" id="conf-val">Medium</span></div>
+              <input type="range" id="conf" min="0.15" max="0.7" step="0.05" value="0.35" aria-label="Detection sensitivity" style="direction: rtl">
+            </div>
+            <div>
+              <div class="label" style="margin-bottom:6px">Track people by</div>
+              <div class="seg block" id="anchor-seg"><button class="on" data-v="feet">Feet</button><button data-v="center">Body centre</button></div>
+            </div>
+            <div class="row-between"><span class="label">Show movement trails</span><label class="switch"><input type="checkbox" id="trails" checked aria-label="Show movement trails"><i></i></label></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Activity</div>
+            <ul class="feed" id="count-feed"><li class="none">Events appear here when counting starts.</li></ul>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ================= MOTION CAPTURE ================= -->
+    <section class="view" id="view-motion" hidden>
+      <header class="view-head">
+        <div>
+          <h1>Motion capture</h1>
+          <p class="sub">Capture body movement without markers and apply it to a 3D character.</p>
+        </div>
+        <div class="head-actions"><span class="pill" id="motion-status"><i class="dot"></i><span>No source</span></span></div>
+      </header>
+      <div class="workspace">
+        <div class="stage-col">
+          <div class="dual">
+            <div class="stage" id="motion-stage">
+              <div class="frame" hidden>
+                <video playsinline muted loop></video>
+                <canvas></canvas>
+              </div>
+            </div>
+            <div class="stage viewport" id="motion-viewport">
+              <div class="badge-tl" id="skin-badge">3D view. Drag to rotate.</div>
+            </div>
+          </div>
+          <div class="sourcebar" id="motion-sourcebar">
+            <span class="grow"></span>
+            <button class="btn" id="motion-record" disabled><i class="rec-dot" style="color:var(--accent)"></i><span>Record motion</span></button>
+            <button class="btn" id="motion-export" disabled>Export</button>
+          </div>
+        </div>
+        <aside class="panel">
+          <div class="card">
+            <div class="card-title">Character skin</div>
+            <div class="skins" id="skins">
+              <button class="skin on" data-skin="skeleton">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="4" r="1.6"/><path d="M12 6v8M6 9h12M12 14l-4 7M12 14l4 7"/></svg>
+                <b>Skeleton</b><small>Joints and bones</small>
+              </button>
+              <button class="skin" data-skin="body">
+                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="4.2" r="2.4"/><path d="M8 8h8a2 2 0 0 1 2 2v5h-2.2V22h-2.6v-6h-2.4v6H8.2v-7H6v-5a2 2 0 0 1 2-2z"/></svg>
+                <b>Body</b><small>Solid mannequin</small>
+              </button>
+              <button class="skin" data-skin="mesh">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 2l8 4.5v9L12 22l-8-6.5v-9z"/><path d="M12 2v20M4 6.5l8 5 8-5M4 15.5l8-4 8 4"/></svg>
+                <b>Mesh</b><small>Rigged 3D character</small>
+              </button>
+              <button class="skin" data-skin="custom">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+                <b>Your model</b><small id="custom-name">Upload a .glb file</small>
+              </button>
+            </div>
+            <input type="file" id="custom-file" accept=".glb,.gltf,model/gltf-binary" hidden>
+            <p class="hint" id="skin-hint" style="margin-top:10px">Your model needs a standard humanoid rig (Mixamo or Ready Player Me bone names).</p>
+          </div>
+          <div class="card stack">
+            <div class="card-title" style="margin-bottom:0">Settings</div>
+            <div class="row-between"><span class="label">Mirror view</span><label class="switch"><input type="checkbox" id="mirror" aria-label="Mirror view"><i></i></label></div>
+            <div class="row-between"><span class="label">Skeleton on video</span><label class="switch"><input type="checkbox" id="overlay" checked aria-label="Skeleton on video"><i></i></label></div>
+            <div>
+              <div class="row-between"><span class="label">Smoothing</span><span class="label num" id="smooth-val">Medium</span></div>
+              <input type="range" id="smooth" min="0" max="0.85" step="0.05" value="0.5" aria-label="Smoothing">
+            </div>
+            <div>
+              <div class="label" style="margin-bottom:6px">Capture quality</div>
+              <div class="seg block" id="quality-seg"><button data-v="lite">Fast</button><button class="on" data-v="full">Accurate</button></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Capture status</div>
+            <div class="stats">
+              <div class="stat"><div class="v" id="mo-fps">0</div><div class="l">Frames per second</div></div>
+              <div class="stat"><div class="v" id="mo-conf">0<small>%</small></div><div class="l">Body visibility</div></div>
+              <div class="stat"><div class="v" id="mo-frames">0</div><div class="l">Frames recorded</div></div>
+              <div class="stat"><div class="v" id="mo-time">0:00</div><div class="l">Recording length</div></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ================= INSIGHTS ================= -->
+    <section class="view" id="view-insights" hidden>
+      <header class="view-head">
+        <div>
+          <h1>Insights</h1>
+          <p class="sub">Results from your people counting sessions.</p>
+        </div>
+      </header>
+      <div class="empty-state" id="ins-empty" hidden>
+        <div class="inner">
+          <div class="empty-icon" style="border-color:var(--line);color:var(--ink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
+          <h3>No sessions yet</h3>
+          <p>Run a people count on a camera or a video. The results appear here.</p>
+          <button class="btn primary" data-goto="count">Go to People counter</button>
+        </div>
+      </div>
+      <div id="ins-body" class="stack" style="gap:16px" hidden>
+        <div class="filters">
+          <select class="field" id="ins-session" aria-label="Session" style="max-width:340px"></select>
+          <span class="pill" id="ins-meta"></span>
+          <span style="flex:1"></span>
+          <a class="btn" id="ins-export" download>Download CSV</a>
+          <button class="btn ghost" id="ins-delete">Delete session</button>
+        </div>
+        <div class="kpis" id="ins-kpis"></div>
+        <div class="grid-2">
+          <div class="card chart-card">
+            <div class="chart-head"><h3>People over time</h3><p>Count each second</p></div>
+            <div class="legend" id="occ-legend"></div>
+            <div class="chart" id="chart-occ"></div>
+          </div>
+          <div class="card chart-card">
+            <div class="chart-head"><h3>Line crossings</h3><p id="cross-sub">In and out</p></div>
+            <div class="legend"><span><i class="box" style="background:var(--s1)"></i>In</span><span><i class="box" style="background:var(--s2)"></i>Out</span></div>
+            <div class="chart" id="chart-cross"></div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card chart-card">
+            <div class="chart-head"><h3>Where people spent time</h3><p>Floor position in the camera view</p></div>
+            <div class="heat" id="heat" style="margin-top:10px"><canvas></canvas></div>
+            <div class="heat-legend"><span>Less time</span><i></i><span>More time</span></div>
+          </div>
+          <div class="card chart-card">
+            <div class="chart-head"><h3>Event log</h3><p id="ev-count"></p></div>
+            <div class="table-wrap" style="margin-top:6px">
+              <table><thead><tr><th>Time</th><th>Event</th><th>Person</th><th class="num-col">Time in area</th></tr></thead><tbody id="ev-body"></tbody></table>
+            </div>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h3>All sessions</h3><p id="all-sub"></p></div>
+          <div class="table-wrap" style="margin-top:6px;max-height:340px">
+            <table><thead><tr><th>Session</th><th>Source</th><th>Date</th><th class="num-col">Length</th><th class="num-col">Unique people</th><th class="num-col">In</th><th class="num-col">Out</th><th class="num-col">Area visits</th><th class="num-col">Peak</th></tr></thead><tbody id="all-body"></tbody></table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status"><span></span><button hidden></button></div>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
