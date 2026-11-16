@@ -1,9 +1,9 @@
-// People counter: sends video frames to the server and draws the results.
+// People counter: sends video frames to the counting engine and draws the results.
 import { $, el, fmtTime, toast, segmented } from "./util.js";
 import { Source } from "./source.js";
+import { engine, createSession } from "./engine.js";
 
 const CORAL = "#ff5a52", TEAL = "#19b8a6", WHITE = "#ffffff";
-const SEND_WIDTH = 640;          // frames are scaled down before they go to the server
 const EVENT_TEXT = {
   new: "appeared",
   in: "crossed in",
@@ -20,10 +20,9 @@ export function initCount({ goInsights }) {
   const nameInput = $("#count-name");
   const feed = $("#count-feed");
   const status = $("#count-status");
-  const grab = document.createElement("canvas");
 
   const state = {
-    running: false, ws: null, sessionId: null,
+    running: false, session: null, sessionId: null,
     line: null, zone: null,          // normalised 0..1 coordinates
     tool: null, draft: [], cursor: null,
     people: [], trails: new Map(),
@@ -42,58 +41,67 @@ export function initCount({ goInsights }) {
   video.addEventListener("ended", () => state.running && stop());
 
   // ---------- session ----------
-  function start() {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${location.host}/ws/track`);
-    state.ws = ws;
+  async function start() {
     startBtn.disabled = true;
     startBtn.textContent = "Starting";
-    ws.onopen = () => {
-      sendConfig();
-      const fallback = source.kind === "file" ? source.fileName : `Camera ${new Date().toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`;
-      ws.send(JSON.stringify({ type: "start", name: nameInput.value.trim() || fallback, source: source.kind === "file" ? "upload" : "camera" }));
-    };
-    ws.onmessage = async (msg) => {
-      const data = JSON.parse(msg.data);
-      if (data.type === "started") {
-        state.sessionId = data.session_id;
-        state.running = true;
-        state.trails.clear();
-        feed.replaceChildren();
-        setRunningUI(true);
-        if (source.kind === "file") {
-          video.loop = false;
-          video.currentTime = 0;
-          await video.play().catch(() => {});
-        }
-        sendFrame();
-      } else if (data.type === "result") {
-        onResult(data);
-        if (state.running) requestAnimationFrame(sendFrame);
-      } else if (data.type === "stopped") {
-        const id = data.session_id;
-        showStats(data.stats);
-        ws.close();
-        toast("Session saved.", "View insights", () => goInsights(id));
-      }
-    };
-    ws.onclose = () => {
-      if (state.running) toast("The connection to the engine stopped. The session was saved.");
+    const session = createSession();
+    const fallback = source.kind === "file" ? source.fileName : `Camera ${new Date().toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`;
+    try {
+      state.sessionId = await session.start({
+        name: nameInput.value.trim() || fallback,
+        source: source.kind === "file" ? "upload" : "camera",
+        config: { line: state.line, zone: state.zone, conf: state.conf, anchor: state.anchor },
+      });
+    } catch (err) {
+      console.error(err);
+      toast(engine.mode === "server" ? err.message : "The counting model did not load. Reload the page and try again.");
+      setRunningUI(false);
+      return;
+    }
+    if (!source.active) { session.stop(); setRunningUI(false); return; }
+    session.onLost = () => {
+      toast("The connection to the engine stopped. The session was saved.");
       state.running = false;
-      state.ws = null;
+      state.session = null;
       state.people = [];
       setRunningUI(false);
     };
-    ws.onerror = () => toast("The engine did not answer. Make sure the app is still running.");
+    state.session = session;
+    state.running = true;
+    state.trails.clear();
+    feed.replaceChildren();
+    setRunningUI(true);
+    if (source.kind === "file") {
+      video.loop = false;
+      video.currentTime = 0;
+      await video.play().catch(() => {});
+    }
+    loop(session);
   }
 
-  function stop() {
+  // One frame at a time: the next frame goes in when the last result is back.
+  async function loop(session) {
+    while (state.running && state.session === session) {
+      if (video.readyState < 2 || !video.videoWidth) { await new Promise((r) => setTimeout(r, 100)); continue; }
+      let result = null;
+      try { result = await session.process(video); } catch (err) { console.warn(err); }
+      if (result && state.running && state.session === session) onResult(result);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+  }
+
+  async function stop() {
     if (!state.running) return;
+    const session = state.session;
     state.running = false;
+    state.session = null;
     if (source.kind === "file") video.pause();
-    state.ws?.send(JSON.stringify({ type: "stop" }));
     state.people = [];
     setRunningUI(false);
+    const done = await session.stop();
+    if (!done) return;
+    showStats(done.stats);
+    toast("Session saved.", "View insights", () => goInsights(done.session_id));
   }
 
   function setRunningUI(on) {
@@ -109,21 +117,7 @@ export function initCount({ goInsights }) {
   }
 
   function sendConfig(extra) {
-    if (state.ws?.readyState !== WebSocket.OPEN) return;
-    state.ws.send(JSON.stringify(extra
-      ? { type: "config", ...extra }
-      : { type: "config", line: state.line, zone: state.zone, conf: state.conf, anchor: state.anchor }));
-  }
-
-  function sendFrame() {
-    if (!state.running || state.ws?.readyState !== WebSocket.OPEN) return;
-    if (video.readyState < 2 || !video.videoWidth) { setTimeout(sendFrame, 100); return; }
-    grab.width = SEND_WIDTH;
-    grab.height = Math.round((SEND_WIDTH * video.videoHeight) / video.videoWidth);
-    grab.getContext("2d").drawImage(video, 0, 0, grab.width, grab.height);
-    grab.toBlob((blob) => {
-      if (blob && state.running && state.ws?.readyState === WebSocket.OPEN) state.ws.send(blob);
-    }, "image/jpeg", 0.75);
+    state.session?.configure(extra);
   }
 
   function onResult(data) {

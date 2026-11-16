@@ -8,7 +8,21 @@ A computer vision app that runs on your own computer. It uses a built-in webcam,
 | **Motion capture** | Captures the body movement of one or two people without markers and applies it to 3D characters: skeleton, solid body, rigged mesh, or your own `.glb` model. Records motion and exports it for Blender. |
 | **Insights** | Dashboard for each saved counting session: totals, people over time, line crossings, a heatmap, and an event log. CSV download. |
 
-## Start the app
+## Two ways to run it
+
+| | Hosted page (GitHub Pages) | On your computer |
+|---|---|---|
+| Install | None. Open the link in Chrome or Edge. | Python, then `./start.sh` |
+| Counting engine | Runs in the browser (YOLO11 with ONNX Runtime Web) | Python (YOLO11 + Supervision + ByteTrack) |
+| Tracking quality | Good. Simpler tracker. | Best |
+| Saved sessions | In that browser only | In a database file on your computer |
+| Motion capture | Same | Same |
+
+In both cases the video stays on your computer. The sidebar shows which engine is active: "Browser engine" or "Engine ready".
+
+**Publish the hosted page:** in the GitHub repository, open **Settings > Pages** and set **Source** to **GitHub Actions**. Each push then publishes the `static` folder. The link appears on that Settings page.
+
+## Start the app on your computer
 
 You need [Python](https://www.python.org/downloads/) 3.10 to 3.13. On Windows, tick "Add Python to PATH" in the installer.
 
@@ -28,9 +42,10 @@ The first start installs the libraries and takes a few minutes. Then the app ope
 
 **Motion capture**
 1. Select a source. Stand so the camera sees your full body.
-2. Select a character skin. For **Your model**, upload a `.glb` character with a Mixamo or Ready Player Me rig.
-3. Select **Record motion**. Select it again to stop.
-4. Select **Export for Blender**. You get one `.bvh` file for each person. **Raw data** saves the body points as JSON.
+2. Select a character skin. Set **Visual effect** to **Hologram** for a glowing wireframe body with particle trails.
+3. For **Your model**, upload a `.glb` character with a Mixamo or Ready Player Me rig.
+4. Select **Record motion**. Select it again to stop.
+5. Select **Export for Blender**. You get one `.bvh` file for each person. **Raw data** saves the body points as JSON.
 
 **Open the motion in Blender**
 1. In Blender, select **File > Import > Motion Capture (.bvh)**.
@@ -42,7 +57,8 @@ The first start installs the libraries and takes a few minutes. Then the app ope
 - `app/tracker.py`: [YOLO11](https://docs.ultralytics.com) finds people. [Supervision](https://github.com/roboflow/supervision) and its companion package [Trackers](https://github.com/roboflow/trackers) give each person an ID (ByteTrack), count line crossings (`LineZone`), and check the area (`PolygonZone`).
 - `app/main.py`: the local web server (FastAPI). The browser sends video frames. The server returns the people it found.
 - `app/store.py`: saves sessions in `data/visiontest.db` (SQLite).
-- `static/`: the web interface. Motion capture runs in the browser with MediaPipe Pose and three.js. `static/js/bvh.js` writes the Blender file.
+- `static/js/engine.js`: selects the engine. It also holds the browser engine for the hosted page.
+- `static/`: the web interface. Motion capture runs in the browser with MediaPipe Pose and three.js. `static/js/bvh.js` writes the Blender file. `static/js/hologram.js` draws the hologram effect.
 
 ## Good to know
 

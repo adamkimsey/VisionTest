@@ -1,13 +1,14 @@
 // Motion capture: finds 33 body points per person in the video (MediaPipe
 // Pose, runs in the browser) and applies them to 3D characters (three.js).
 // It follows up to two people.
-import * as THREE from "/vendor/three/three.module.js";
-import { OrbitControls } from "/vendor/three/OrbitControls.js";
-import { FilesetResolver, PoseLandmarker } from "/vendor/mediapipe/vision_bundle.mjs";
+import * as THREE from "../vendor/three/three.module.js";
+import { OrbitControls } from "../vendor/three/OrbitControls.js";
+import { FilesetResolver, PoseLandmarker } from "../vendor/mediapipe/vision_bundle.mjs";
 import { $, $$, fmtTime, toast, segmented } from "./util.js";
 import { Source } from "./source.js";
 import { SkeletonSkin, BodySkin, RigSkin } from "./avatar.js";
 import { buildBVH } from "./bvh.js";
+import { Hologram } from "./hologram.js";
 
 const MAX_PEOPLE = 2;
 const COLORS = [{ css: "#ff5a52", hex: 0xff5a52 }, { css: "#19b8a6", hex: 0x19b8a6 }];   // person 1, person 2
@@ -21,6 +22,8 @@ const JOINT_NAMES = [
   "left_foot_index", "right_foot_index",
 ];
 const LINKS = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [27, 31], [28, 32], [27, 29], [28, 30]];
+// Limbs that release hologram particles: arms, legs, body, and neck to head.
+const TRAIL_LINKS = [[11, 13], [13, 15], [15, 19], [12, 14], [14, 16], [16, 20], [23, 25], [25, 27], [27, 31], [24, 26], [26, 28], [28, 32], [11, 23], [12, 24], [11, 12], [7, 8]];
 const BODY_IDS = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 // Index of the opposite-side point, used for the mirror view.
 const SWAP = JOINT_NAMES.map((n) => JOINT_NAMES.indexOf(n.startsWith("left_") ? n.replace("left_", "right_") : n.replace("right_", "left_")));
@@ -42,11 +45,11 @@ export function initMotion() {
   }));
   const state = {
     visible: false, landmarker: null, loading: false, quality: "full",
-    mirror: false, overlay: true, smooth: 0.5,
+    mirror: false, overlay: true, smooth: 0.5, look: "standard",
     skinName: null, skinCache: {}, customUrl: null, skinRequest: 0,
     lastVideoTime: -1,
     recording: false, frames: [], recStart: 0,
-    fpsCount: 0, fpsAt: performance.now(),
+    fpsCount: 0, fpsAt: performance.now(), lastTick: performance.now(),
   };
 
   const source = new Source({
@@ -73,9 +76,9 @@ export function initMotion() {
     state.loading = true;
     setStatus("Loading capture model");
     try {
-      const files = await FilesetResolver.forVisionTasks("/vendor/mediapipe/wasm");
+      const files = await FilesetResolver.forVisionTasks("vendor/mediapipe/wasm");
       const make = (delegate) => PoseLandmarker.createFromOptions(files, {
-        baseOptions: { modelAssetPath: `/models/pose_landmarker_${state.quality}.task`, delegate },
+        baseOptions: { modelAssetPath: `models/pose_landmarker_${state.quality}.task`, delegate },
         runningMode: "VIDEO", numPoses: MAX_PEOPLE,
         minPoseDetectionConfidence: 0.4, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
       });
@@ -109,7 +112,10 @@ export function initMotion() {
   const rim = new THREE.DirectionalLight(0xffffff, 0.6);
   rim.position.set(-3, 2, -3);
   scene.add(rim);
-  scene.add(new THREE.GridHelper(8, 16, 0x3a3a3a, 0x222222));
+  const grid = new THREE.GridHelper(8, 16, 0x3a3a3a, 0x222222);
+  scene.add(grid);
+  const standardBackground = scene.background;
+  const holo = new Hologram(renderer, scene, camera);
   const rings = slots.map((slot) => {
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.435, 64), new THREE.MeshBasicMaterial({ color: slot.color.hex, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2;
@@ -123,6 +129,7 @@ export function initMotion() {
     const w = viewport.clientWidth, h = viewport.clientHeight;
     if (!w || !h) return;
     renderer.setSize(w, h, false);
+    holo.resize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
@@ -132,7 +139,7 @@ export function initMotion() {
   async function makeSkins(name) {
     if (name === "skeleton") return COLORS.map((c) => new SkeletonSkin(c.hex));
     if (name === "body") return COLORS.map((c) => new BodySkin(c.hex));
-    if (name === "mesh") return Promise.all(COLORS.map((c) => RigSkin.load("/models/xbot.glb", { tintJoints: true, color: c.hex })));
+    if (name === "mesh") return Promise.all(COLORS.map((c) => RigSkin.load("models/xbot.glb", { tintJoints: true, color: c.hex })));
     return Promise.all(COLORS.map(() => RigSkin.load(state.customUrl)));
   }
 
@@ -149,6 +156,7 @@ export function initMotion() {
       return;
     }
     if (request !== state.skinRequest) return;     // a newer choice was made while this one loaded
+    state.skinCache[name].forEach((skin) => holo.styleSkin(skin.group, state.look === "hologram"));
     const rigged = name === "mesh" || name === "custom";
     slots.forEach((slot) => {
       if (slot.skin) scene.remove(slot.skin.group);
@@ -188,6 +196,16 @@ export function initMotion() {
     slots.forEach((slot) => { slot.smoothed = null; });
   });
   $("#overlay").addEventListener("change", (e) => { state.overlay = e.target.checked; });
+  segmented($("#look-seg"), (v) => {
+    state.look = v;
+    const on = v === "hologram";
+    holo.setEnabled(on);
+    grid.visible = !on;
+    scene.background = on ? holo.background : standardBackground;
+    Object.values(state.skinCache).flat().forEach((skin) => holo.styleSkin(skin.group, on));
+    // The hologram needs a full body surface. The skeleton has none.
+    if (on && state.skinName === "skeleton") setSkin("mesh");
+  });
   $("#smooth").addEventListener("input", (e) => {
     state.smooth = Number(e.target.value);
     $("#smooth-val").textContent = state.smooth < 0.25 ? "Low" : state.smooth < 0.65 ? "Medium" : "High";
@@ -264,6 +282,8 @@ export function initMotion() {
     slot.smoothed = null;
     slot.lm = null;
     slot.centre = null;
+    slot.points = null;
+    holo.forget(slot.index);
     if (slot.skin) slot.skin.group.visible = false;
   }
 
@@ -305,8 +325,9 @@ export function initMotion() {
     slot.groundY += (lowestOf(slot.smoothed) - slot.groundY) * 0.2;
     if (slot.skin) {
       slot.skin.group.visible = true;
-      slot.skin.update(slot.smoothed.map((v) => new THREE.Vector3(v.x, v.y - slot.groundY, v.z)));
     }
+    slot.points = slot.smoothed.map((v) => new THREE.Vector3(v.x, v.y - slot.groundY, v.z));
+    slot.skin?.update(slot.points);
   }
 
   /** Two people stand side by side, in the same order as in the video. One person stands in the centre. */
@@ -319,7 +340,7 @@ export function initMotion() {
       if (slot.skin) slot.skin.group.position.x = slot.offsetX;
     });
     slots.forEach((slot) => {
-      rings[slot.index].visible = slot.active || (slot.index === 0 && !active.length);
+      rings[slot.index].visible = state.look !== "hologram" && (slot.active || (slot.index === 0 && !active.length));
       rings[slot.index].position.x = slot.active ? slot.offsetX : 0;
     });
   }
@@ -406,7 +427,17 @@ export function initMotion() {
       $("#mo-time").textContent = fmtTime(state.frames.length ? state.frames.at(-1).t / 1000 : 0);
     }
     controls.update();
-    renderer.render(scene, camera);
+    const dt = Math.min((now - state.lastTick) / 1000, 0.1);
+    state.lastTick = now;
+    if (state.look === "hologram") {
+      for (const slot of slots) {
+        if (!slot.active || !slot.points) continue;
+        const offset = new THREE.Vector3(slot.offsetX, 0, 0);
+        holo.emit(slot.index, slot.points.map((p) => p.clone().add(offset)), TRAIL_LINKS, dt);
+      }
+      holo.update(dt);
+      holo.render();
+    } else renderer.render(scene, camera);
   }
 
   setSkin("skeleton");

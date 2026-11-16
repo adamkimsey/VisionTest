@@ -2,6 +2,7 @@
 import { $, $$ } from "./util.js";
 import { initCount } from "./count.js";
 import { initInsights } from "./insights.js";
+import { engine, detectEngine } from "./engine.js";
 
 const views = {};
 let active = "count";
@@ -38,18 +39,28 @@ $("#theme-toggle").addEventListener("click", () => {
 
 async function pollEngine() {
   const dot = $("#engine-dot"), text = $("#engine-text");
-  try {
-    const health = await (await fetch("/api/health")).json();
-    dot.className = health.model_ready ? "dot ok" : "dot";
-    text.textContent = health.model_ready ? "Engine ready" : "Loading model";
-    setTimeout(pollEngine, health.model_ready ? 15000 : 1500);
-  } catch {
+  const wasServer = engine.mode === "server" && engine.checked;
+  await detectEngine();
+  if (engine.mode === "browser" && wasServer) {
+    // The local engine was running and stopped. Do not switch engines without telling the user.
+    engine.mode = "server";
     dot.className = "dot";
     text.textContent = "Engine offline";
     setTimeout(pollEngine, 3000);
+    return;
   }
+  engine.checked = true;
+  if (engine.mode === "browser") {
+    dot.className = "dot ok";
+    text.textContent = "Browser engine";
+    text.title = "Counting runs in this browser. Sessions are saved in this browser only.";
+    return;
+  }
+  dot.className = engine.ready ? "dot ok" : "dot";
+  text.textContent = engine.ready ? "Engine ready" : "Loading model";
+  setTimeout(pollEngine, engine.ready ? 15000 : 1500);
 }
-pollEngine();
+await pollEngine();
 
 const start = location.hash.slice(1);
 if (["motion", "insights"].includes(start)) go(start);

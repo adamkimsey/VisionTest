@@ -3,3 +3,4 @@ __pycache__/
 data/
 models/*.pt
 .DS_Store
+models/*.onnx

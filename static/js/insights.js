@@ -1,6 +1,7 @@
 // Insights: results of saved people counting sessions.
 import { $, el, fmtTime, fmtDate, toast } from "./util.js";
 import { lineChart, barChart, heatmap } from "./charts.js";
+import { store } from "./engine.js";
 
 const EVENT_NAMES = {
   new: "Appeared", in: "Crossed in", out: "Crossed out",
@@ -14,7 +15,7 @@ export function initInsights() {
   let current = null;       // full data of the selected session
 
   async function load(selectId) {
-    sessions = await (await fetch("/api/sessions")).json();
+    sessions = await store.list();
     $("#ins-empty").hidden = sessions.length > 0;
     $("#ins-body").hidden = sessions.length === 0;
     if (!sessions.length) return;
@@ -26,9 +27,11 @@ export function initInsights() {
   }
 
   async function show(id) {
-    const res = await fetch(`/api/sessions/${id}`);
-    if (!res.ok) return;
-    current = await res.json();
+    const data = await store.get(id);
+    if (!data) return;
+    current = data;
+    $("#ins-export").href = store.csvUrl(current);
+    $("#ins-export").download = `session-${current.id}.csv`;
     render();
   }
 
@@ -45,7 +48,6 @@ export function initInsights() {
     const s1 = css.getPropertyValue("--s1").trim(), s2 = css.getPropertyValue("--s2").trim();
 
     $("#ins-meta").textContent = `${s.source === "upload" ? "Uploaded video" : "Camera"} · ${fmtTime(s.duration)}${s.live ? " · counting now" : ""}`;
-    $("#ins-export").href = `/api/sessions/${s.id}/export.csv`;
     $("#ins-kpis").replaceChildren(
       kpi("Unique people", s.unique_count, null, true),
       kpi("Crossed in", s.in_count),
@@ -123,7 +125,7 @@ export function initInsights() {
   select.addEventListener("change", () => show(Number(select.value)));
   $("#ins-delete").addEventListener("click", async () => {
     if (!current || !confirm(`Delete the session "${current.name}"? You cannot undo this.`)) return;
-    await fetch(`/api/sessions/${current.id}`, { method: "DELETE" });
+    await store.remove(current.id);
     toast("Session deleted.");
     current = null;
     load();

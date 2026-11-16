@@ -1,6 +1,6 @@
 // BVH export. BVH is a standard motion capture format that Blender opens
 // with File > Import > Motion Capture (.bvh).
-import * as THREE from "/vendor/three/three.module.js";
+import * as THREE from "../vendor/three/three.module.js";
 import { L, mid, basisQuat, headQuat } from "./avatar.js";
 
 const FPS = 30;

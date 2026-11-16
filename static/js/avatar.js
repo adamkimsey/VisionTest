@@ -1,7 +1,7 @@
 // Character skins for motion capture. Each skin has update(points), where
 // points is a list of 33 body positions (THREE.Vector3, metres, feet at y = 0).
-import * as THREE from "/vendor/three/three.module.js";
-import { GLTFLoader } from "/vendor/three/GLTFLoader.js";
+import * as THREE from "../vendor/three/three.module.js";
+import { GLTFLoader } from "../vendor/three/GLTFLoader.js";
 
 const CORAL = 0xff5a52;
 export const L = {
